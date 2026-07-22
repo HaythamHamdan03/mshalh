@@ -4,7 +4,7 @@ import { resolve } from 'path';
 
 export default defineConfig({
   root: resolve(__dirname, 'src/renderer'),
-  base: '/',
+  base: '/mshalh/',
   plugins: [react()],
   publicDir: resolve(__dirname, 'public'),
   build: {
