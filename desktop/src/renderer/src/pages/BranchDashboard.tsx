@@ -42,7 +42,7 @@ export default function BranchDashboard() {
     queryFn: () => whatsappApi.getBranchStatus(branchCode!),
     select: (res) => res.data as { status: string; qrDataUrl: string | null; branchName: string },
     enabled: !!branchCode,
-    refetchInterval: 8000,
+    refetchInterval: (query) => (query.state.data as any)?.status === 'ready' ? 10000 : 2000,
   });
 
   // Background poll for factory-returned orders to trigger notification

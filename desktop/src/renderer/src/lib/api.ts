@@ -87,5 +87,5 @@ export const reportsApi = {
 export const whatsappApi = {
   getStatus: () => api.get('/api/whatsapp/status'),
   getBranchStatus: (branchCode: string) => api.get(`/api/whatsapp/status/${branchCode}`),
-  forceReconnect: (branchCode: string) => api.post(`/api/whatsapp/${branchCode}/force-reconnect`),
+  reconnect: (branchCode: string) => api.post(`/api/whatsapp/reconnect/${branchCode}`),
 };

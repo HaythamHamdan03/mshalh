@@ -413,13 +413,20 @@ export function WhatsAppStatusGrid({ singleBranchCode }: { singleBranchCode?: st
       : whatsappApi.getStatus(),
     select: (res) => {
       if (singleBranchCode) {
-        // Single branch endpoint returns { status, qrDataUrl, branchName } directly
         const d = res.data;
         return { [singleBranchCode]: d } as Record<string, any>;
       }
       return res.data as Record<string, any>;
     },
-    refetchInterval: 5000,
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      if (!data) return 2000;
+      const statuses = singleBranchCode
+        ? { [singleBranchCode]: (data as any)[singleBranchCode] }
+        : (data as Record<string, any>);
+      const allReady = Object.values(statuses).every((s: any) => s?.status === 'ready');
+      return allReady ? 10000 : 2000;
+    },
     retry: 1,
   });
 
@@ -457,25 +464,25 @@ export function WhatsAppStatusGrid({ singleBranchCode }: { singleBranchCode?: st
 }
 
 function WhatsAppBranchCard({ code, info, onRefresh }: { code: string; info: any; onRefresh: () => void }) {
-  const qc = useQueryClient();
-
-  const forceReconnectMutation = useMutation({
-    mutationFn: () => whatsappApi.forceReconnect(code),
+  const queryClient = useQueryClient();
+  const reconnectMutation = useMutation({
+    mutationFn: () => whatsappApi.reconnect(code),
     onSuccess: () => {
       toast.success('جاري مسح الجلسة وإعادة الاتصال...');
-      setTimeout(() => { onRefresh(); qc.invalidateQueries({ queryKey: ['whatsapp-status'] }); }, 3000);
+      setTimeout(() => { queryClient.invalidateQueries({ queryKey: ['whatsapp-status'] }); onRefresh(); }, 1000);
     },
-    onError: () => toast.error('تعذرت إعادة الاتصال'),
+    onError: () => toast.error('فشلت إعادة الاتصال'),
   });
 
   const statusConfig = {
-    ready:        { label: 'متصل',          icon: <CheckCircle size={18} />, color: 'text-success bg-success/10 border-success/20' },
-    qr:           { label: 'في انتظار المسح', icon: <MessageCircle size={18} />, color: 'text-gold-dark bg-gold/10 border-gold/20' },
-    initializing: { label: 'جاري الاتصال',   icon: <Loader size={18} className="animate-spin" />, color: 'text-muted bg-bg border-border' },
-    disconnected: { label: 'غير متصل',       icon: <WifiOff size={18} />, color: 'text-error bg-error/10 border-error/20' },
+    ready:        { label: 'متصل',          icon: <CheckCircle size={18} />,                      color: 'text-success bg-success/10 border-success/20' },
+    qr:           { label: 'امسح الباركود', icon: <MessageCircle size={18} />,                   color: 'text-gold-dark bg-gold/10 border-gold/20' },
+    initializing: { label: 'جاري التحميل', icon: <Loader size={18} className="animate-spin" />, color: 'text-muted bg-bg border-border' },
+    disconnected: { label: 'غير متصل',      icon: <Loader size={18} className="animate-spin" />, color: 'text-error bg-error/10 border-error/20' },
   };
 
   const cfg = statusConfig[info?.status as keyof typeof statusConfig] ?? statusConfig.disconnected;
+  const notReady = info?.status === 'disconnected' || info?.status === 'initializing';
 
   return (
     <div className="border border-border rounded-xl p-5 bg-card">
@@ -485,19 +492,19 @@ function WhatsAppBranchCard({ code, info, onRefresh }: { code: string; info: any
           <span className="text-xs text-muted font-mono" dir="ltr">{code}</span>
         </div>
         <div className="flex items-center gap-2">
+          {notReady && (
+            <button
+              onClick={() => reconnectMutation.mutate()}
+              disabled={reconnectMutation.isPending}
+              className="btn-secondary btn-sm text-xs"
+            >
+              {reconnectMutation.isPending ? <Loader size={12} className="animate-spin" /> : 'إعادة ربط'}
+            </button>
+          )}
           <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm font-semibold ${cfg.color}`}>
             {cfg.icon}
             {cfg.label}
           </div>
-          <button
-            onClick={() => forceReconnectMutation.mutate()}
-            disabled={forceReconnectMutation.isPending}
-            className="btn-secondary btn-sm text-xs"
-            title="مسح الجلسة وإعادة الاتصال من الصفر"
-          >
-            {forceReconnectMutation.isPending ? <Loader size={14} className="animate-spin" /> : <WifiOff size={14} />}
-            إعادة ربط
-          </button>
         </div>
       </div>
 
@@ -509,17 +516,18 @@ function WhatsAppBranchCard({ code, info, onRefresh }: { code: string; info: any
           <div className="border-4 border-gold rounded-xl overflow-hidden shadow-lg">
             <img src={info.qrDataUrl} alt="QR Code" className="w-64 h-64" />
           </div>
-          <button onClick={onRefresh} className="btn-secondary btn-sm">تحديث</button>
         </div>
+      ) : info?.status === 'qr' ? (
+        <p className="text-sm text-gold-dark mt-1">جاري إنشاء الباركود...</p>
       ) : info?.status === 'disconnected' ? (
         <div className="flex items-center gap-2 mt-2 text-sm text-muted">
           <span className="w-3.5 h-3.5 border-2 border-gold border-t-transparent rounded-full animate-spin flex-shrink-0" />
-          جاري إعادة الاتصال تلقائياً... (أو اضغط "إعادة ربط" إذا استمرت المشكلة)
+          جاري إعادة الاتصال تلقائياً... (أو اضغط «إعادة ربط» إذا استمرت المشكلة)
         </div>
       ) : info?.status === 'initializing' ? (
         <div className="flex items-center gap-2 mt-2 text-sm text-muted">
           <span className="w-3.5 h-3.5 border-2 border-gold border-t-transparent rounded-full animate-spin flex-shrink-0" />
-          يتصل... انتظر قليلاً
+          جاري تحميل واتساب... سيظهر الباركود تلقائياً
         </div>
       ) : null}
     </div>

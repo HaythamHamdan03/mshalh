@@ -35,10 +35,10 @@ function clearSessionFiles(branchCode: string): void {
   try {
     if (fs.existsSync(sessionDir)) {
       fs.rmSync(sessionDir, { recursive: true, force: true });
-      console.log(`[WhatsApp ${branchCode}] 🗑️  تم حذف ملفات الجلسة القديمة`);
+      console.log(`[WhatsApp ${branchCode}] 🗑️ تم مسح ملفات الجلسة`);
     }
   } catch (e) {
-    console.warn(`[WhatsApp ${branchCode}] تعذر حذف ملفات الجلسة:`, e);
+    console.warn(`[WhatsApp ${branchCode}] تعذر مسح ملفات الجلسة:`, e);
   }
 }
 
@@ -65,7 +65,7 @@ export function initBranchClient(branchCode: string, branchName: string): void {
   const client = new Client({
     authStrategy: new LocalAuth({
       clientId: branchCode,
-      dataPath: path.join(process.cwd(), '.whatsapp-session'),
+      dataPath: SESSION_BASE,
     }),
     puppeteer: {
       headless: true,
@@ -108,30 +108,42 @@ export function initBranchClient(branchCode: string, branchName: string): void {
     }
   });
 
-  client.on('auth_failure', async () => {
-    console.error(`[WhatsApp ${branchCode}] ❌ فشل التحقق — حذف الجلسة وإعادة البدء...`);
+  client.on('auth_failure', () => {
+    console.error(`[WhatsApp ${branchCode}] ❌ فشل التحقق — مسح الجلسة وإعادة الاتصال...`);
     states.delete(branchCode);
-    await safeDestroy(client);
-    clearSessionFiles(branchCode);
-    console.log(`[WhatsApp ${branchCode}] 🔄 إعادة المحاولة خلال 30 ثانية...`);
-    setTimeout(() => initBranchClient(branchCode, branchName), 30000);
+    safeDestroy(client).then(() => {
+      clearSessionFiles(branchCode);
+      setTimeout(() => initBranchClient(branchCode, branchName), 2000);
+    });
   });
 
-  client.on('disconnected', async (reason) => {
-    console.warn(`[WhatsApp ${branchCode}] ⚠️ انقطع (${reason}) — إعادة الاتصال خلال 20 ثانية...`);
+  client.on('disconnected', (reason) => {
+    console.warn(`[WhatsApp ${branchCode}] ⚠️ انقطع (${reason}) — إعادة الاتصال تلقائياً...`);
     states.delete(branchCode);
-    await safeDestroy(client);
-    setTimeout(() => initBranchClient(branchCode, branchName), 20000);
+    // Fire-and-forget destroy — don't clear session, phone may reconnect with existing session
+    safeDestroy(client).catch(() => {});
+    setTimeout(() => initBranchClient(branchCode, branchName), 2000);
   });
 
-  client.initialize().catch(async (err) => {
+  client.initialize().catch((err) => {
     console.error(`[WhatsApp ${branchCode}] خطأ في التهيئة:`, err.message);
     states.delete(branchCode);
-    await safeDestroy(client);
+    safeDestroy(client).catch(() => {});
     clearSessionFiles(branchCode);
-    console.log(`[WhatsApp ${branchCode}] 🔄 إعادة المحاولة خلال 30 ثانية...`);
-    setTimeout(() => initBranchClient(branchCode, branchName), 30000);
+    setTimeout(() => initBranchClient(branchCode, branchName), 5000);
   });
+}
+
+export function forceReconnect(branchCode: string, branchName: string): void {
+  const existing = states.get(branchCode);
+  states.delete(branchCode);
+  const run = async () => {
+    if (existing) await safeDestroy(existing.client);
+    clearSessionFiles(branchCode);
+    console.log(`[WhatsApp ${branchCode}] 🔁 إعادة اتصال يدوية — جلسة نظيفة`);
+    initBranchClient(branchCode, branchName);
+  };
+  run().catch(console.error);
 }
 
 export async function sendFromBranch(branchCode: string, phone: string, message: string): Promise<void> {
@@ -173,17 +185,4 @@ export function getBranchStatus(branchCode: string): { status: ClientStatus; qrD
   const state = states.get(branchCode);
   if (!state) return null;
   return { status: state.status, qrDataUrl: state.qrDataUrl, branchName: state.branchName };
-}
-
-export function forceReconnect(branchCode: string, branchName: string): void {
-  const existing = states.get(branchCode);
-  states.delete(branchCode);
-  // Fire-and-forget: don't await destroy so HTTP route returns immediately
-  const run = async () => {
-    if (existing) await safeDestroy(existing.client);
-    clearSessionFiles(branchCode);
-    console.log(`[WhatsApp ${branchCode}] 🔁 إعادة اتصال يدوية — جلسة نظيفة`);
-    initBranchClient(branchCode, branchName);
-  };
-  run().catch(console.error);
 }

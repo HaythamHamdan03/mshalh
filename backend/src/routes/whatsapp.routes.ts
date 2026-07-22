@@ -1,7 +1,6 @@
 import { Router } from 'express';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { getAllStatuses, getBranchStatus, forceReconnect } from '../services/whatsapp.manager';
-import { prisma } from '../lib/prisma';
 
 const router = Router();
 router.use(authenticate);
@@ -17,17 +16,12 @@ router.get('/status/:branchCode', (req: AuthRequest, res) => {
   res.json(s ?? { status: 'disconnected', qrDataUrl: null, branchName: req.params.branchCode });
 });
 
-// POST /api/whatsapp/:branchCode/force-reconnect — clear session and reconnect fresh
-router.post('/:branchCode/force-reconnect', async (req: AuthRequest, res) => {
-  try {
-    const { branchCode } = req.params;
-    const branch = await prisma.branch.findUnique({ where: { code: branchCode } });
-    if (!branch) { res.status(404).json({ error: 'الفرع غير موجود' }); return; }
-    await forceReconnect(branchCode, branch.name);
-    res.json({ ok: true });
-  } catch (e: any) {
-    res.status(500).json({ error: e.message });
-  }
+// POST /api/whatsapp/reconnect/:branchCode — clears session and forces fresh QR
+router.post('/reconnect/:branchCode', (req: AuthRequest, res) => {
+  const { branchCode } = req.params;
+  const current = getBranchStatus(branchCode);
+  forceReconnect(branchCode, current?.branchName ?? branchCode);
+  res.json({ ok: true });
 });
 
 export { router as whatsappRoutes };
