@@ -1,0 +1,228 @@
+// Development: SQLite (no Docker needed)
+// Production:  change provider to "postgresql" and update DATABASE_URL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ── Enums are not supported in SQLite; we store them as String ──────────────
+// All enum fields use String in SQLite and are validated at the app layer.
+// When switching to PostgreSQL, replace String with the proper enum types.
+
+model Branch {
+  id        String   @id @default(uuid())
+  name      String
+  code      String   @unique
+  address   String?
+  phone     String?
+  mapLink   String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users     User[]
+  customers Customer[]
+  orders    Order[]
+}
+
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  username     String   @unique
+  passwordHash String
+  role         String   @default("BRANCH")
+  branchId     String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  branch        Branch?              @relation(fields: [branchId], references: [id])
+  createdOrders Order[]              @relation("CreatedBy")
+  updatedOrders Order[]              @relation("UpdatedBy")
+  statusHistory OrderStatusHistory[]
+  auditLogs     AuditLog[]
+}
+
+model Customer {
+  id           String   @id @default(uuid())
+  branchId     String
+  name         String
+  mobile       String
+  secondMobile String?
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  branch       Branch                @relation(fields: [branchId], references: [id])
+  orders       Order[]
+  measurements CustomerMeasurement[]
+}
+
+model CustomerMeasurement {
+  id                  String   @id @default(uuid())
+  customerId          String
+  customerHeight      Float?
+  sleeveLength        Float?
+  shoulderWidth       Float?
+  chestWidth          Float?
+  backLength          Float?
+  frontLength         Float?
+  specialMeasurements String?
+  notes               String?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+}
+
+model Order {
+  id            String   @id @default(uuid())
+  orderNumber   String   @unique
+  branchId      String
+  customerId    String
+  status        String   @default("DRAFT")
+  productType   String   @default("BISHT")
+  quantity      Int      @default(1)
+  dueDate       DateTime?
+  urgent        Boolean  @default(false)
+  price         Float?
+  deposit       Float?
+  remaining     Float?
+  paymentStatus String   @default("UNPAID")
+  branchNotes   String?
+  factoryNotes  String?
+  internalNotes String?
+  createdById   String?
+  updatedById   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  branch        Branch               @relation(fields: [branchId], references: [id])
+  customer      Customer             @relation(fields: [customerId], references: [id])
+  createdBy     User?                @relation("CreatedBy", fields: [createdById], references: [id])
+  updatedBy     User?                @relation("UpdatedBy", fields: [updatedById], references: [id])
+  items         OrderItem[]
+  statusHistory OrderStatusHistory[]
+  attachments   Attachment[]
+  notifications NotificationLog[]
+  payments      Payment[]
+}
+
+model OrderItem {
+  id                  String   @id @default(uuid())
+  orderId             String
+  itemNumber          Int      @default(1)
+  embroideryModel     String?
+  fabric              String?
+  size                String?
+  color               String?
+  zariWidth           String?
+  brooj               String?
+  tanjeema            String?
+  dakkaLine           String?
+  mukassar            String?
+  takheela            String?
+  neckHoleWidth       String?
+  embroideryLength    String?
+  customerHeight      String?
+  sleeveLength        String?
+  shoulderWidth       String?
+  chestWidth          String?
+  backLength          String?
+  frontLength         String?
+  khabna              String?
+  specialMeasurements String?
+  notes               String?
+  furwaGender         String?
+  furType             String?
+  createdAt           DateTime @default(now())
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+}
+
+model OrderStatusHistory {
+  id          String   @id @default(uuid())
+  orderId     String
+  oldStatus   String?
+  newStatus   String
+  changedById String?
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  order     Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  changedBy User? @relation(fields: [changedById], references: [id])
+}
+
+model Attachment {
+  id        String   @id @default(uuid())
+  orderId   String
+  filename  String
+  filepath  String
+  mimetype  String?
+  createdAt DateTime @default(now())
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+}
+
+model DropdownOption {
+  id        String   @id @default(uuid())
+  category  String
+  value     String
+  label     String
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@unique([category, value])
+}
+
+model NotificationLog {
+  id        String    @id @default(uuid())
+  orderId   String?
+  mobile    String
+  message   String
+  type      String    @default("SMS")
+  status    String    @default("PENDING")
+  provider  String?
+  sentAt    DateTime?
+  error     String?
+  createdAt DateTime  @default(now())
+
+  order Order? @relation(fields: [orderId], references: [id])
+}
+
+model Payment {
+  id        String   @id @default(uuid())
+  orderId   String
+  amount    Float
+  type      String
+  notes     String?
+  createdAt DateTime @default(now())
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  action    String
+  entity    String
+  entityId  String?
+  details   String?
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+}
+
+model SystemSetting {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     String
+  updatedAt DateTime @updatedAt
+}

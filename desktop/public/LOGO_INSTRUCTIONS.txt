@@ -1,0 +1,8 @@
+Place your company logo here as: logo.png
+
+Recommended size: 512x512 pixels or higher, PNG format.
+
+This file is served at /logo.png in the Electron renderer.
+It appears on the login screen and app sidebar.
+
+The app handles a missing logo gracefully with a fallback emoji.

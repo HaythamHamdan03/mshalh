@@ -1,0 +1,41 @@
+node_modules/
+
+# Build outputs
+desktop/out/
+desktop/dist/
+
+# Environment files (contain secrets)
+.env
+.env.local
+backend/.env
+
+# Database
+backend/prisma/dev.db
+backend/prisma/dev.db-journal
+backend/prisma/dev.db-wal
+backend/prisma/dev.db-shm
+
+# WhatsApp sessions
+backend/.whatsapp-session/
+
+# Logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Electron artifacts (no longer used)
+desktop/resources/icon.ico
+desktop/electron-builder.json5
+desktop/electron.vite.config.ts
+desktop/src/main/
+desktop/src/preload/
+desktop/tsconfig.node.json
+desktop/tsconfig.web.json
+
+# WhatsApp web cache
+backend/.wwebjs_cache/
+
+# Lock files (optional - comment out if you want reproducible installs)
+# package-lock.json
