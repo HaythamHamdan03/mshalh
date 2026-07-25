@@ -194,11 +194,9 @@ router.post('/', async (req: AuthRequest, res) => {
       },
     });
 
-    // Send SMS only when branch sends directly to factory
+    // Fire-and-forget — never block the HTTP response waiting for WhatsApp
     if (initialStatus === 'SENT_TO_FACTORY') {
-      try {
-        await notificationService.sendOrderSentToFactory(customer.mobile, orderNumber, branch.name, branch.code, (branch as any).mapLink, order.id);
-      } catch { /* SMS failure should not block order creation */ }
+      notificationService.sendOrderSentToFactory(customer.mobile, orderNumber, branch.name, branch.code, (branch as any).mapLink, order.id).catch(() => {});
     }
 
     res.status(201).json(order);
@@ -294,14 +292,12 @@ router.patch('/:id/status', async (req: AuthRequest, res) => {
       },
     });
 
-    // Send SMS on key transitions
-    try {
-      if (status === 'SENT_TO_FACTORY') {
-        await notificationService.sendOrderSentToFactory(order.customer.mobile, order.orderNumber, order.branch.name, order.branch.code, (order.branch as any).mapLink, order.id);
-      } else if (status === 'RECEIVED_AT_BRANCH_CONFIRMED') {
-        await notificationService.sendOrderReadyAtBranch(order.customer.mobile, order.orderNumber, order.branch.name, order.branch.code, (order.branch as any).mapLink, order.id);
-      }
-    } catch { /* SMS failure should not block status update */ }
+    // Fire-and-forget — never block the HTTP response waiting for WhatsApp
+    if (status === 'SENT_TO_FACTORY') {
+      notificationService.sendOrderSentToFactory(order.customer.mobile, order.orderNumber, order.branch.name, order.branch.code, (order.branch as any).mapLink, order.id).catch(() => {});
+    } else if (status === 'RECEIVED_AT_BRANCH_CONFIRMED') {
+      notificationService.sendOrderReadyAtBranch(order.customer.mobile, order.orderNumber, order.branch.name, order.branch.code, (order.branch as any).mapLink, order.id).catch(() => {});
+    }
 
     res.json(updated);
   } catch (err) {
@@ -328,6 +324,24 @@ router.get('/:id/history', async (req: AuthRequest, res) => {
     res.json(history);
   } catch (err) {
     res.status(500).json({ error: 'خطأ في جلب السجل' });
+  }
+});
+
+// DELETE /api/orders/:id — admin only
+router.delete('/:id', async (req: AuthRequest, res) => {
+  if (req.user?.role !== 'ADMIN') {
+    res.status(403).json({ error: 'المسؤول فقط يمكنه حذف الطلبات' }); return;
+  }
+  try {
+    const order = await prisma.order.findUnique({ where: { id: req.params.id } });
+    if (!order) { res.status(404).json({ error: 'الطلب غير موجود' }); return; }
+    await prisma.orderStatusHistory.deleteMany({ where: { orderId: req.params.id } });
+    await prisma.orderItem.deleteMany({ where: { orderId: req.params.id } });
+    await prisma.order.delete({ where: { id: req.params.id } });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'خطأ في حذف الطلب' });
   }
 });
 

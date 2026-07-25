@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowRight, Printer, AlertTriangle, CheckCircle } from 'lucide-react';
+import { ArrowRight, Printer, AlertTriangle, CheckCircle, Trash2 } from 'lucide-react';
 import { ordersApi } from '../lib/api';
 import StatusBadge from '../components/StatusBadge';
 import { useAuthStore } from '../stores/authStore';
@@ -56,6 +56,22 @@ export default function OrderDetailsPage() {
     onError: (err: any) => toast.error(err?.response?.data?.error || 'حدث خطأ'),
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: () => ordersApi.delete(id!),
+    onSuccess: () => {
+      toast.success('تم حذف الطلب');
+      qc.invalidateQueries({ queryKey: ['orders'] });
+      navigate(-1);
+    },
+    onError: (err: any) => toast.error(err?.response?.data?.error || 'حدث خطأ في الحذف'),
+  });
+
+  const handleDelete = () => {
+    if (window.confirm(`هل أنت متأكد من حذف الطلب ${order?.orderNumber}؟ لا يمكن التراجع عن هذا الإجراء.`)) {
+      deleteMutation.mutate();
+    }
+  };
+
   const handlePrint = (type: 'receipt' | 'jobcard' | 'delivery') => {
     if (!order) return;
     const win = window.open('', '_blank', 'width=800,height=600');
@@ -96,6 +112,15 @@ export default function OrderDetailsPage() {
           <button onClick={() => handlePrint('delivery')} className="btn-secondary btn-sm">
             <Printer size={16} /> سند تسليم
           </button>
+          {user?.role === 'ADMIN' && (
+            <button
+              onClick={handleDelete}
+              disabled={deleteMutation.isPending}
+              className="btn-sm flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-error/10 text-error border border-error/20 hover:bg-error/20 transition-colors text-sm font-semibold"
+            >
+              <Trash2 size={14} /> حذف
+            </button>
+          )}
         </div>
       </div>
 

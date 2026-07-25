@@ -44,6 +44,7 @@ export const ordersApi = {
   updateStatus: (id: string, status: string, notes?: string) =>
     api.patch(`/api/orders/${id}/status`, { status, notes }),
   getHistory: (id: string) => api.get(`/api/orders/${id}/history`),
+  delete: (id: string) => api.delete(`/api/orders/${id}`),
 };
 
 export const customersApi = {
