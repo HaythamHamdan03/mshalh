@@ -78,10 +78,11 @@ app.listen(PORT, async () => {
     const branches = await prisma.branch.findMany({
       where: { isActive: true, NOT: { code: 'FCT' } },
     });
-    for (const branch of branches) {
-      initBranchClient(branch.code, branch.name);
+    console.log(`📱 تهيئة واتساب لـ ${branches.length} فروع (بشكل متدرج كل 30 ثانية)...`);
+    for (let i = 0; i < branches.length; i++) {
+      const branch = branches[i];
+      setTimeout(() => initBranchClient(branch.code, branch.name), i * 30_000);
     }
-    console.log(`📱 تهيئة واتساب لـ ${branches.length} فروع...`);
   }
 });
 
